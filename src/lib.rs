@@ -155,7 +155,7 @@ pub fn get_clone_flags() -> nix::sched::CloneFlags {
 }
 
 fn userns(config: &ChildConfig) -> Result<(), &'static str> {
-    use nix::unistd::{Gid, Uid};
+    //use nix::unistd::{Gid, Uid};
 
     eprint!("=> trying a user namespace...");
     let mut result = [0];
@@ -167,6 +167,8 @@ fn userns(config: &ChildConfig) -> Result<(), &'static str> {
         return Err("could not read");
     }
 
+    // It seems that the following code is not needed, since the same effect
+    // of these actions will be achieved by the parent remaping the uid and gid
     //let gid = Gid::from_raw(config.uid);
     //let uid = Uid::from_raw(config.uid);
     //nix::unistd::setgroups(&[gid])
