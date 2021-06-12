@@ -5,6 +5,9 @@ use nix::unistd::Pid;
 use nix::sched::CloneFlags;
 use nix::sys::utsname::uname;
 
+const USERNS_OFFSET: u32 = 1000;
+const USERNS_COUNT: u32 = 1;
+
 const SUITS: [&'static str; 4] = ["swords", "wands", "pentacles", "cups"];
 const MINOR: [&'static str; 14] = [
     "ace", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "page",
@@ -211,9 +214,6 @@ fn child(config: &mut ChildConfig) -> isize {
 
     return 0;
 }
-
-const USERNS_OFFSET: u32 = 1000;
-const USERNS_COUNT: u32 = 1;
 
 fn deny_setgroups(pid: Pid) -> Result<(), &'static str> {
     use std::fs::OpenOptions;
