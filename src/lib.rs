@@ -180,10 +180,105 @@ fn userns(config: &ChildConfig) -> Result<(), &'static str> {
     Ok(())
 }
 
+use caps::Capability;
+fn get_capabilities_to_drop() -> Vec<Capability> {
+    vec![
+        // The following 3 caps allow access to the kernel audit system
+        Capability::CAP_AUDIT_CONTROL,
+        Capability::CAP_AUDIT_READ,
+        Capability::CAP_AUDIT_WRITE,
+
+        // This cap allows a process to prevent system from suspending
+        Capability::CAP_BLOCK_SUSPEND,
+
+        // This cap bypasses permission checks for reading
+        Capability::CAP_DAC_READ_SEARCH,
+
+        // This cap allows the process to change a suid file without unsetting
+        // the suid bit.
+        Capability::CAP_FSETID,
+
+        // This capability allows the process to lock memory
+        Capability::CAP_IPC_LOCK,
+
+        // The following capabilities allow the process to fiddle with
+        // MAC systems settings (apps like SELinux, AppArmor, etc)
+        Capability::CAP_MAC_ADMIN,
+        Capability::CAP_MAC_OVERRIDE,
+
+        // The following cap allows the process to create device files
+        Capability::CAP_MKNOD,
+
+        // The following cap allows the process to add capabitlities to
+        // executables
+        Capability::CAP_SETFCAP,
+
+        // The following cap allows access to the syslog
+        Capability::CAP_SYSLOG,
+
+        // The following cap allows a lot of things that can be dangerous
+        Capability::CAP_SYS_ADMIN,
+
+        // The following cap allows system reboot and loading of kernels.
+        // While rebooting is user-namespaces and loading kernels can only
+        // happen in the root user namespace, we don't gain anything from this
+        // cap so we should drop it.
+        Capability::CAP_SYS_BOOT,
+
+        // The following cap allows loading modules
+        Capability::CAP_SYS_MODULE,
+
+        // The following cap allows a process to change its priority in the
+        // scheduler
+        Capability::CAP_SYS_NICE,
+
+        // The following cap gives raw access to the io ports
+        Capability::CAP_SYS_RAWIO,
+
+        Capability::CAP_SYS_RESOURCE,
+
+        Capability::CAP_SYS_TIME,
+
+        Capability::CAP_WAKE_ALARM,
+
+        // The following command I am not sure what it does exactly. It seems
+        // that it allows the process to run BPF operations, so it might be used
+        // to monitor the network (?). Also it was under CAP_SYS_ADMIN previously
+        // so it seems like a good idea to drop
+        Capability::CAP_BPF,
+
+        // The following command allows performance monitoring, which might lead
+        // to denial or downgrade of service
+        Capability::CAP_PERFMON,
+
+        // This cap should not be able to work across namespaces, however it used
+        // to be in CAP_SYS_ADMIN, so i drop it
+        Capability::CAP_CHECKPOINT_RESTORE,
+    ]
+}
+
+fn capabilities() -> Result<(), &'static str> {
+    use caps::{CapSet, drop};
+    let drop_caps = get_capabilities_to_drop();
+    eprint!("=> dropping capabilities...");
+
+    let sets = [CapSet::Bounding, CapSet::Inheritable];
+
+    for set in sets {
+        for cap in drop_caps.iter() {
+            drop(None, set, *cap)
+                .map_err(|_| "Could not drop a cap")?;
+        }
+    }
+
+    Ok(())
+}
+
 fn child(config: &mut ChildConfig) -> isize {
     let res = nix::unistd::sethostname(&config.hostname)
         .map_err(|_| "could not set the hostname")
-        .and_then(|_| userns(config));
+        .and_then(|_| userns(config))
+        .and_then(|_| capabilities());
 
     if res.is_err() {
         let s = res.unwrap_err();
