@@ -262,6 +262,15 @@ fn capabilities() -> Result<(), &'static str> {
     let drop_caps = get_capabilities_to_drop();
     eprint!("=> dropping capabilities...");
 
+    // By restricting the Inheritable capabilities set, we also restrict the
+    // Ambient set.
+    // By restricting the Bounding set, we restrict what capabilities can be
+    // gained by execve'ing a file with given capabilities.
+    // See man 7 capabilities, section:
+    //
+    //     Transformation of capabilities during execve()
+    //
+    // for how capabilities sets update after execve
     let sets = [CapSet::Bounding, CapSet::Inheritable];
 
     for set in sets {
