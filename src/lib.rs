@@ -1,6 +1,6 @@
+use nix::unistd::Pid;
 use std::ffi::{CStr, CString};
 use std::os::unix::io::RawFd;
-use nix::unistd::Pid;
 
 use nix::sched::CloneFlags;
 use nix::sys::utsname::uname;
@@ -258,7 +258,7 @@ fn get_capabilities_to_drop() -> Vec<Capability> {
 }
 
 fn capabilities() -> Result<(), &'static str> {
-    use caps::{CapSet, drop};
+    use caps::{drop, CapSet};
     let drop_caps = get_capabilities_to_drop();
     eprint!("=> dropping capabilities...");
 
