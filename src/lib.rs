@@ -275,8 +275,7 @@ fn capabilities() -> Result<(), &'static str> {
 
     for set in sets {
         for cap in drop_caps.iter() {
-            drop(None, set, *cap)
-                .map_err(|_| "Could not drop a cap")?;
+            drop(None, set, *cap).map_err(|_| "Could not drop a cap")?;
         }
     }
 
@@ -360,8 +359,7 @@ pub fn handle_child_uid_map(pid: Pid, fd: i32) -> Result<(), &'static str> {
     }
 
     // notify the child that we have remaped the user/group
-    nix::unistd::write(fd, &[0])
-        .map_err(|_| "could not write to child")?;
+    nix::unistd::write(fd, &[0]).map_err(|_| "could not write to child")?;
     Ok(())
 }
 
