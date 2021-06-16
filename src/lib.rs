@@ -236,9 +236,7 @@ fn get_capabilities_to_drop() -> Vec<Capability> {
         Capability::CAP_SYS_RAWIO,
 
         Capability::CAP_SYS_RESOURCE,
-
         Capability::CAP_SYS_TIME,
-
         Capability::CAP_WAKE_ALARM,
 
         // The following command I am not sure what it does exactly. It seems
@@ -284,9 +282,84 @@ fn capabilities() -> Result<(), &'static str> {
     Ok(())
 }
 
+fn mounts(config: &ChildConfig) -> Result<(), &'static str> {
+    use tempdir::TempDir;
+
+    eprint!("=> remounting filesystem...");
+
+    let source: Option<&str> = None;
+    let fstype: Option<&str> = None;
+    let data: Option<&str> = None;
+
+    // This is not needed. The original blog post remounts / as private in this
+    // mount namespace, so that the subsequent mounting of the new root will not
+    // be visible in other mount namespaces.
+    nix::mount::mount(source, "/", fstype, nix::mount::MsFlags::MS_PRIVATE, data)
+        .map_err(|_| "could not remount")?;
+
+    eprintln!("remounted.");
+
+    eprint!("=> mounting in a temporary directory...");
+
+    // We now create a new temporary directory that will hold the new root
+    let mount_dir = TempDir::new("fy_tmp").map_err(|_| "could not create tmp dir")?;
+
+    // Now we will mount the source directory of the container, to the new
+    // temporary directory we just created.
+    let fstype: Option<&str> = None;
+    let data: Option<&str> = None;
+    nix::mount::mount(
+        // Source
+        Some(config.mount_dir.as_str()),
+        // Target
+        mount_dir.path(),
+        // None
+        fstype,
+        // BIND means that we are making a directory subtree visible at another
+        // point in the filesystem.
+        nix::mount::MsFlags::MS_PRIVATE | nix::mount::MsFlags::MS_BIND,
+        // None
+        data,
+    )
+    .map_err(|_| "could not mount dir")?;
+
+    // And we create a nested temporary directory to hold the old root.
+    // This is required by pivot_root.
+    let inner_dir =
+        TempDir::new_in(mount_dir.path(), "oldroot").map_err(|_| "could not create inner dir")?;
+
+    eprint!("=> pivoting root...");
+
+    // Now we change the "/" to be the outer temporary directory, and we place
+    // the old root on the inner temporary directory.
+    nix::unistd::pivot_root(mount_dir.path(), inner_dir.path())
+        .map_err(|_| "could not pivot root")?;
+
+    // Since the root has now changed, we can't use the same name for the tmp
+    // directory as we did before pivoting. We must create the nameonce again.
+    let new_inner_dir_path = inner_dir.path().file_name().unwrap();
+    use std::path::Path;
+    let p = Path::new("/").join(new_inner_dir_path);
+
+    eprint!("=> unmounting {}...", inner_dir.path().display());
+    // Now we unmount the old root, since it is not needed any more.
+    // MNT_DETACH performs a lazy detach. Meaning that the mount point will not
+    // be available for any new access. However the actual unmounting will happen
+    // when the mount point stops being busy.
+    nix::mount::umount2(&p, nix::mount::MntFlags::MNT_DETACH)
+        .map_err(|_| "could not unmount old root")?;
+
+    // And finally delete the create directory to leave the system clean.
+    std::fs::remove_dir(p).map_err(|_| "could not delete inner dir")?;
+
+    eprintln!("done.");
+    Ok(())
+}
+
 fn child(config: &mut ChildConfig) -> isize {
     let res = nix::unistd::sethostname(&config.hostname)
         .map_err(|_| "could not set the hostname")
+        .and_then(|_| mounts(config))
         .and_then(|_| userns(config))
         .and_then(|_| capabilities());
 
@@ -296,7 +369,6 @@ fn child(config: &mut ChildConfig) -> isize {
         nix::unistd::close(config.fd).unwrap();
         return -1;
     }
-
 
     if nix::unistd::close(config.fd).is_err() {
         println!("close failed");
