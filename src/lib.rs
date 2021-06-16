@@ -279,6 +279,8 @@ fn capabilities() -> Result<(), &'static str> {
         }
     }
 
+    eprintln!("done.");
+
     Ok(())
 }
 
