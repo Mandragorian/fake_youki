@@ -308,16 +308,12 @@ fn child(config: &mut ChildConfig) -> isize {
         .iter()
         .map(|s| CString::new(s.as_str()).unwrap())
         .collect();
-    if nix::unistd::execve(
+    nix::unistd::execve(
         args[0].as_c_str(),
         args.as_slice(),
         &[CStr::from_bytes_with_nul(&[0]).unwrap()],
     )
-    .is_err()
-    {
-        println!("execve failed");
-        return -3;
-    }
+    .unwrap();
 
     return 0;
 }
